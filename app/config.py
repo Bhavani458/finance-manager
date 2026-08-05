@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -6,6 +7,17 @@ class Settings(BaseSettings):
 
     ENV: str = "dev"
     DATABASE_URL: str = "${DATABASE_URL}"
+
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def _force_asyncpg(cls, v: str) -> str:
+        # Accept plain `postgresql://` / `postgres://` (what Supabase/Heroku hand out)
+        # and rewrite to the asyncpg driver our stack uses.
+        if v.startswith("postgresql://"):
+            return "postgresql+asyncpg://" + v[len("postgresql://"):]
+        if v.startswith("postgres://"):
+            return "postgresql+asyncpg://" + v[len("postgres://"):]
+        return v
     TEST_DATABASE_URL: str | None = None
     JWT_SECRET: str = "${JWT_SECRET}"
     JWT_ALGORITHM: str = "${JWT_ALGORITHM}"
