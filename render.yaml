@@ -6,7 +6,6 @@ services:
     region: singapore
     dockerfilePath: ./Dockerfile
     healthCheckPath: /health
-    preDeployCommand: alembic upgrade head && python -m app.seed
     envVars:
       - key: DATABASE_URL
         sync: false

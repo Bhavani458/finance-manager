@@ -116,8 +116,8 @@ The repo ships with `render.yaml` (web service) and `.github/workflows/scheduled
    - `DATABASE_URL` — the Supabase URI above
    - `OPENAI_API_KEY` — your OpenAI key
    - `CORS_ORIGINS` — comma-separated frontend origins (e.g. `https://your-app.vercel.app`)
-3. Deploy is triggered automatically. `preDeployCommand` runs `alembic upgrade head` +
-   `python -m app.seed` before the new version boots.
+3. Deploy is triggered automatically. Migrations + seed run inside the container's startup
+   command on every boot (both are idempotent).
 4. Free plan sleeps after 15 min inactivity (30s cold start on first request). Upgrade to
    Starter ($7/mo) for always-on.
 
