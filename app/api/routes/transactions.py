@@ -19,11 +19,6 @@ from app.services.categorization import apply_rules
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
 
-async def _user_account_ids(db: AsyncSession, user_id: uuid.UUID) -> list[uuid.UUID]:
-    r = await db.execute(select(Account.id).where(Account.user_id == user_id))
-    return [row[0] for row in r.all()]
-
-
 @router.get("", response_model=list[TransactionOut])
 async def list_transactions(
     category_id: uuid.UUID | None = None,
@@ -36,10 +31,11 @@ async def list_transactions(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    account_ids = await _user_account_ids(db, user.id)
-    if not account_ids:
-        return []
-    stmt = select(Transaction).where(Transaction.account_id.in_(account_ids))
+    stmt = (
+        select(Transaction)
+        .join(Account, Account.id == Transaction.account_id)
+        .where(Account.user_id == user.id)
+    )
     if category_id:
         stmt = stmt.where(Transaction.category_id == category_id)
     if account_id:
@@ -82,17 +78,24 @@ async def create_transaction(
     return t
 
 
+async def _owned_txn_or_404(db: AsyncSession, txn_id: uuid.UUID, user_id: uuid.UUID) -> Transaction:
+    stmt = (
+        select(Transaction)
+        .join(Account, Account.id == Transaction.account_id)
+        .where(Transaction.id == txn_id, Account.user_id == user_id)
+    )
+    t = (await db.execute(stmt)).scalar_one_or_none()
+    if t is None:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    return t
+
+
 @router.patch("/{txn_id}", response_model=TransactionOut)
 async def update_transaction(
     txn_id: uuid.UUID, payload: TransactionUpdate,
     user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
-    t = await db.get(Transaction, txn_id)
-    if t is None:
-        raise HTTPException(status_code=404, detail="Transaction not found")
-    account = await db.get(Account, t.account_id)
-    if account is None or account.user_id != user.id:
-        raise HTTPException(status_code=404, detail="Transaction not found")
+    t = await _owned_txn_or_404(db, txn_id, user.id)
     for k, v in payload.model_dump(exclude_unset=True).items():
         setattr(t, k, v)
     await db.commit()
@@ -104,12 +107,7 @@ async def update_transaction(
 async def delete_transaction(
     txn_id: uuid.UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
-    t = await db.get(Transaction, txn_id)
-    if t is None:
-        raise HTTPException(status_code=404, detail="Not found")
-    account = await db.get(Account, t.account_id)
-    if account is None or account.user_id != user.id:
-        raise HTTPException(status_code=404, detail="Not found")
+    t = await _owned_txn_or_404(db, txn_id, user.id)
     await db.delete(t)
     await db.commit()
 

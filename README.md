@@ -99,3 +99,36 @@ Two-mode JWT validation:
 
 All routes under `/api/v1`. Bare-object responses (no envelope). Pagination via `?limit=&offset=`.
 See `/docs` for the full OpenAPI schema.
+
+## Deployment (Supabase + Render)
+
+The repo ships with `render.yaml` (web service) and `.github/workflows/scheduled-jobs.yml`
+(daily jobs). Roughly one hour end-to-end, ~$0/mo on free tiers.
+
+**Supabase Postgres**
+1. Create a project at [supabase.com](https://supabase.com); region Mumbai (`ap-south-1`).
+2. **Project Settings → Database → Connection string → URI (Transaction pooler, port 6543)**.
+3. Change prefix from `postgresql://` to `postgresql+asyncpg://` — that's your `DATABASE_URL`.
+
+**Render web service**
+1. Render dashboard → **New → Blueprint** → connect this repo. It reads `render.yaml`.
+2. In the created service's **Environment** tab, set:
+   - `DATABASE_URL` — the Supabase URI above
+   - `OPENAI_API_KEY` — your OpenAI key
+   - `CORS_ORIGINS` — comma-separated frontend origins (e.g. `https://your-app.vercel.app`)
+3. Deploy is triggered automatically. `preDeployCommand` runs `alembic upgrade head` +
+   `python -m app.seed` before the new version boots.
+4. Free plan sleeps after 15 min inactivity (30s cold start on first request). Upgrade to
+   Starter ($7/mo) for always-on.
+
+**Scheduled jobs (GitHub Actions cron)**
+1. Add `DATABASE_URL` to **GitHub → Settings → Secrets and variables → Actions → New secret**.
+2. `.github/workflows/scheduled-jobs.yml` runs the three daily jobs (`refresh_valuations`,
+   `process_sips`, `rollup_net_worth`) at IST times.
+3. Manual runs: **Actions → Scheduled jobs → Run workflow → pick a job**.
+
+**Auto-deploy**
+Every push to `main` builds a new image and rolls it out with a zero-downtime deploy. Migrations
+run automatically in the pre-deploy step.
+
+**Custom domain (optional)** — one click in Render's dashboard; provisions the TLS cert.

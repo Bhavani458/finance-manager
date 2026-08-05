@@ -1,0 +1,45 @@
+name: Scheduled jobs
+
+on:
+  schedule:
+    - cron: "30 21 * * *"   # 3am IST — refresh_valuations
+    - cron: "30 23 * * *"   # 5am IST — process_sips
+    - cron: "30 17 * * *"   # 11pm IST — rollup_net_worth
+  workflow_dispatch:
+    inputs:
+      job:
+        description: Job to run
+        required: true
+        type: choice
+        options: [refresh_valuations, process_sips, rollup_net_worth]
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pick job
+        id: pick
+        run: |
+          case "${{ github.event.schedule }}" in
+            "30 21 * * *") echo "job=refresh_valuations" >> $GITHUB_OUTPUT ;;
+            "30 23 * * *") echo "job=process_sips" >> $GITHUB_OUTPUT ;;
+            "30 17 * * *") echo "job=rollup_net_worth" >> $GITHUB_OUTPUT ;;
+            *)             echo "job=${{ inputs.job }}" >> $GITHUB_OUTPUT ;;
+          esac
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        run: docker build -t jobrunner .
+
+      - name: Run ${{ steps.pick.outputs.job }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          AMFI_BASE_URL: https://api.mfapi.in
+        run: |
+          docker run --rm \
+            -e DATABASE_URL \
+            -e AMFI_BASE_URL \
+            jobrunner python -m app.jobs.${{ steps.pick.outputs.job }}

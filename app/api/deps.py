@@ -22,12 +22,15 @@ from app.models.user import User
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
+_jwks_client: jwt.PyJWKClient | None = (
+    jwt.PyJWKClient(settings.CLERK_JWKS_URL) if settings.CLERK_JWKS_URL else None
+)
+
 
 def _decode_token(token: str) -> dict:
-    if settings.CLERK_JWKS_URL:
+    if _jwks_client is not None:
         try:
-            jwks_client = jwt.PyJWKClient(settings.CLERK_JWKS_URL)
-            signing_key = jwks_client.get_signing_key_from_jwt(token).key
+            signing_key = _jwks_client.get_signing_key_from_jwt(token).key
             return jwt.decode(token, signing_key, algorithms=["RS256"], options={"verify_aud": False})
         except jwt.PyJWKClientError:
             pass  # not a Clerk token — try HS256 dev fallback

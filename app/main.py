@@ -5,6 +5,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.api.routes import (
     accounts,
+    ai_news,
     auth,
     budgets,
     categories,
@@ -38,6 +39,7 @@ def create_app() -> FastAPI:
     prefix = "/api/v1"
     app.include_router(auth.router, prefix=prefix)
     app.include_router(accounts.router, prefix=prefix)
+    app.include_router(ai_news.router, prefix=prefix)
     app.include_router(transactions.router, prefix=prefix)
     app.include_router(categories.router, prefix=prefix)
     app.include_router(budgets.router, prefix=prefix)

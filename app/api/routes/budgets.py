@@ -1,13 +1,18 @@
 import uuid
 from datetime import date
 
+from decimal import Decimal
+
+from dateutil.relativedelta import relativedelta
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
+from app.models.account import Account
 from app.models.budget import Budget
+from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.budget import BudgetCreate, BudgetOut, BudgetUpdate
 from app.services.budgets import compute_spent
@@ -19,13 +24,27 @@ router = APIRouter(prefix="/budgets", tags=["budgets"])
 async def list_budgets(
     month: date = Query(...), user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
-    stmt = select(Budget).where(Budget.user_id == user.id, Budget.month == month)
-    budgets = list((await db.execute(stmt)).scalars().all())
-    out = []
-    for b in budgets:
-        spent = await compute_spent(db, user.id, b.category_id, b.month)
-        out.append(BudgetOut.model_validate({**b.__dict__, "spent": spent}))
-    return out
+    start = month.replace(day=1)
+    end = start + relativedelta(months=1)
+    spent_subq = (
+        select(Transaction.category_id, func.sum(Transaction.amount).label("total"))
+        .join(Account, Account.id == Transaction.account_id)
+        .where(
+            Account.user_id == user.id,
+            Transaction.amount < 0,
+            Transaction.date >= start,
+            Transaction.date < end,
+        )
+        .group_by(Transaction.category_id)
+        .subquery()
+    )
+    stmt = (
+        select(Budget, func.coalesce(spent_subq.c.total, 0))
+        .outerjoin(spent_subq, spent_subq.c.category_id == Budget.category_id)
+        .where(Budget.user_id == user.id, Budget.month == start)
+    )
+    rows = (await db.execute(stmt)).all()
+    return [BudgetOut.model_validate({**b.__dict__, "spent": abs(Decimal(total))}) for b, total in rows]
 
 
 @router.post("", response_model=BudgetOut, status_code=201)

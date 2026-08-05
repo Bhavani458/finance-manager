@@ -3,6 +3,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
@@ -82,3 +83,25 @@ async def patch_type(
     await db.commit()
     await db.refresh(t)
     return t
+
+
+@router.delete("/{type_id}", status_code=204)
+async def delete_type(
+    type_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    t = await db.get(InvestmentType, type_id)
+    if t is None:
+        raise HTTPException(status_code=404, detail="Type not found")
+    if t.is_system:
+        raise HTTPException(status_code=403, detail="Cannot delete system type")
+    if t.created_by_user_id != user.id:
+        raise HTTPException(status_code=403, detail="Not owner")
+
+    await db.delete(t)
+    try:
+        await db.commit()
+    except IntegrityError as e:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Cannot delete a type with existing investments") from e

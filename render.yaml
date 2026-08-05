@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: finance-manager-api
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    preDeployCommand: alembic upgrade head && python -m app.seed
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: ENV
+        value: prod
+      - key: CLERK_JWKS_URL
+        value: https://charming-gar-94.clerk.accounts.dev/.well-known/jwks.json
+      - key: AMFI_BASE_URL
+        value: https://api.mfapi.in
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
