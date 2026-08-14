@@ -12,3 +12,5 @@ build/
 personal-finance-app-mockup.html
 IMPLEMENTATION_GUIDE.md
 .claude/
+
+finance-data.sql

@@ -64,7 +64,7 @@ SYSTEM_INVESTMENT_TYPES = [
     },
     {
         "key": "digital_metal", "display_name": "Digital Gold/Silver",
-        "category": InvestmentCategory.PRECIOUS_METAL, "valuation_method": ValuationMethod.SPOT_RATE,
+        "category": InvestmentCategory.PRECIOUS_METAL, "valuation_method": ValuationMethod.MANUAL,
         "field_schema": [
             {"key": "metal_type", "label": "Metal Type", "data_type": "enum", "required": True,
              "options": ["gold", "silver"]},
